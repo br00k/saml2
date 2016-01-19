@@ -1,16 +1,18 @@
 <?php
 
+namespace SAML2;
+
 /**
- * Class SAML2_UtilsTest
+ * Class \SAML2\UtilsTest
  */
-class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
+class UtilsTest extends \PHPUnit_Framework_TestCase
 {
     /**
      * Test querying a SAML XML document.
      */
     public function testXpQuery()
     {
-        $aq = new SAML2_AttributeQuery();
+        $aq = new AttributeQuery();
         $aq->setNameID(array(
             'Value' => 'NameIDValue',
             'Format' => 'SomeNameIDFormat',
@@ -20,7 +22,7 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
 
         $xml = $aq->toUnsignedXML();
 
-        $nameID = SAML2_Utils::xpQuery($xml, './saml_assertion:Subject/saml_assertion:NameID');
+        $nameID = Utils::xpQuery($xml, './saml_assertion:Subject/saml_assertion:NameID');
         $this->assertTrue(count($nameID) === 1);
         $this->assertEquals('SomeNameIDFormat', $nameID[0]->getAttribute("Format"));
         $this->assertEquals('OurNameQualifier', $nameID[0]->getAttribute("NameQualifier"));
@@ -33,10 +35,9 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
      */
     public function testAddString()
     {
-        $document = new DOMDocument();
+        $document = DOMDocumentFactory::fromString('<root/>');
 
-        $document->loadXML('<root/>');
-        SAML2_Utils::addString(
+        Utils::addString(
             $document->firstChild,
             'testns',
             'ns:somenode',
@@ -48,7 +49,7 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
         );
 
         $document->loadXML('<ns:root xmlns:ns="testns"/>');
-        SAML2_Utils::addString(
+        Utils::addString(
             $document->firstChild,
             'testns',
             'ns:somenode',
@@ -65,14 +66,12 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
      */
     public function testGetAddStrings()
     {
-        $document = new DOMDocument();
-
-        $document->loadXML('<root/>');
-        SAML2_Utils::addStrings(
+        $document = DOMDocumentFactory::fromString('<root/>');
+        Utils::addStrings(
             $document->firstChild,
             'testns',
             'ns:somenode',
-            FALSE,
+            false,
             array('value1', 'value2')
         );
         $this->assertEquals(
@@ -84,11 +83,11 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
         );
 
         $document->loadXML('<ns:root xmlns:ns="testns"/>');
-        SAML2_Utils::addStrings(
+        Utils::addStrings(
             $document->firstChild,
             'testns',
             'ns:somenode',
-            FALSE,
+            false,
             array('value1', 'value2')
         );
         $this->assertEquals(
@@ -100,11 +99,11 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
         );
 
         $document->loadXML('<root/>');
-        SAML2_Utils::addStrings(
+        Utils::addStrings(
             $document->firstChild,
             'testns',
             'ns:somenode',
-            TRUE,
+            true,
             array('en' => 'value (en)', 'no' => 'value (no)')
         );
         $this->assertEquals(
@@ -116,11 +115,11 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
         );
 
         $document->loadXML('<ns:root xmlns:ns="testns"/>');
-        SAML2_Utils::addStrings(
+        Utils::addStrings(
             $document->firstChild,
             'testns',
             'ns:somenode',
-            TRUE,
+            true,
             array('en' => 'value (en)', 'no' => 'value (no)')
         );
         $this->assertEquals(
@@ -137,17 +136,16 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
      */
     public function testExtractString()
     {
-        $document = new DOMDocument();
-        $document->loadXML(
-            '<root xmlns="' . SAML2_Const::NS_MD . '">'.
+        $document = DOMDocumentFactory::fromString(
+            '<root xmlns="' . Constants::NS_MD . '">'.
             '<somenode>value1</somenode>'.
             '<somenode>value2</somenode>'.
             '</root>'
         );
 
-        $stringValues = SAML2_Utils::extractStrings(
+        $stringValues = Utils::extractStrings(
             $document->firstChild,
-            SAML2_Const::NS_MD,
+            Constants::NS_MD,
             'somenode'
         );
 
@@ -161,22 +159,51 @@ class SAML2_UtilsTest extends PHPUnit_Framework_TestCase
      */
     public function testExtractLocalizedString()
     {
-        $document = new DOMDocument();
-        $document->loadXML(
-            '<root xmlns="' . SAML2_Const::NS_MD . '">'.
+        $document = DOMDocumentFactory::fromString(
+            '<root xmlns="' . Constants::NS_MD . '">'.
             '<somenode xml:lang="en">value (en)</somenode>'.
             '<somenode xml:lang="no">value (no)</somenode>'.
             '</root>'
         );
 
-        $localizedStringValues = SAML2_Utils::extractLocalizedStrings(
+        $localizedStringValues = Utils::extractLocalizedStrings(
             $document->firstChild,
-            SAML2_Const::NS_MD,
+            Constants::NS_MD,
             'somenode'
         );
 
         $this->assertTrue(count($localizedStringValues) === 2);
         $this->assertEquals('value (en)', $localizedStringValues["en"]);
         $this->assertEquals('value (no)', $localizedStringValues["no"]);
+    }
+
+    /**
+     * Test xsDateTime format validity
+     *
+     * @dataProvider xsDateTimes
+     */
+    public function testXsDateTimeToTimestamp($shouldPass, $time, $expectedTs = null)
+    {
+        try {
+            $ts = Utils::xsDateTimeToTimestamp($time);
+            $this->assertTrue($shouldPass);
+            $this->assertEquals($expectedTs, $ts);
+        } catch (\Exception $e) {
+            $this->assertFalse($shouldPass);
+        }
+    }
+
+    public function xsDateTimes()
+    {
+        return array(
+            array(true, '2015-01-01T00:00:00Z', 1420070400),
+            array(true, '2015-01-01T00:00:00.0Z', 1420070400),
+            array(true, '2015-01-01T00:00:00.1Z', 1420070400),
+            array(false, '2015-01-01T00:00:00', 1420070400),
+            array(false, '2015-01-01T00:00:00.0', 1420070400),
+            array(false, 'junk'),
+            array(false, '2015-01-01T00:00:00-04:00'),
+            array(false, '2015-01-01T00:00:00.0-04:00'),
+        );
     }
 }
